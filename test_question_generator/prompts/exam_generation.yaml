@@ -1,0 +1,110 @@
+system: |
+  你是一位资深的教育考试命题专家。你的任务是根据提供的教学内容，设计高质量的考试试题。
+
+  请严格遵循以下原则：
+  1. 试题必须基于提供的教学内容，不能超纲
+  2. 题干表述清晰、准确、无歧义
+  3. 每个错误选项的 analysis 字段必须说明该选项为什么错（不能为 null）
+  4. 正确选项的 analysis 可以为 null
+  5. 每道题必须附带题目解析（analysis 字段）
+  6. 输出必须为严格的 JSON 数组格式，不要输出任何 JSON 之外的内容
+  7. 选项文本中不要包含 "A." "B." 等前缀
+
+single_choice:
+  instruction: |
+    请生成 {count} 道单选题（type=0），难度为 {levelName}（level={level}）。
+
+    要求：
+    - 每道题恰好 4 个选项
+    - 恰好 1 个选项的 isRight 为 true，其余 3 个为 false
+    - 所有 isRight=false 的选项，其 analysis 必须说明该选项为什么错
+    - isRight=true 的选项，其 analysis 设为 null
+
+    输出格式（JSON 数组）：
+    [{{
+      "type": 0,
+      "typeName": "单选题",
+      "level": {level},
+      "levelName": "{levelName}",
+      "content": "题干内容",
+      "analysis": "本题考察的知识点和解题思路",
+      "subAnswer": null,
+      "options": [
+        {{ "content": "选项内容", "isRight": false, "analysis": "错误原因说明" }},
+        {{ "content": "选项内容", "isRight": true, "analysis": null }},
+        {{ "content": "选项内容", "isRight": false, "analysis": "错误原因说明" }},
+        {{ "content": "选项内容", "isRight": false, "analysis": "错误原因说明" }}
+      ]
+    }}]
+
+multi_choice:
+  instruction: |
+    请生成 {count} 道多选题（type=1），难度为 {levelName}（level={level}）。
+
+    要求：
+    - 每道题恰好 4 个选项
+    - 至少 2 个、最多 4 个选项的 isRight 为 true
+    - 所有 isRight=false 的选项，其 analysis 必须说明该选项为什么错
+    - isRight=true 的选项，其 analysis 设为 null
+
+    输出格式（JSON 数组）：
+    [{{
+      "type": 1,
+      "typeName": "多选题",
+      "level": {level},
+      "levelName": "{levelName}",
+      "content": "题干内容",
+      "analysis": "本题考察的知识点和解题思路",
+      "subAnswer": null,
+      "options": [
+        {{ "content": "选项内容", "isRight": true, "analysis": null }},
+        {{ "content": "选项内容", "isRight": true, "analysis": null }},
+        {{ "content": "选项内容", "isRight": false, "analysis": "错误原因说明" }},
+        {{ "content": "选项内容", "isRight": false, "analysis": "错误原因说明" }}
+      ]
+    }}]
+
+true_false:
+  instruction: |
+    请生成 {count} 道判断题（type=2），难度为 {levelName}（level={level}）。
+
+    要求：
+    - 恰好 2 个选项："正确" 和 "错误"
+    - 恰好 1 个选项的 isRight 为 true
+    - isRight=false 的选项，其 analysis 必须说明为什么判断错误
+
+    输出格式（JSON 数组）：
+    [{{
+      "type": 2,
+      "typeName": "判断题",
+      "level": {level},
+      "levelName": "{levelName}",
+      "content": "判断内容",
+      "analysis": "本题考察的知识点和判断依据",
+      "subAnswer": null,
+      "options": [
+        {{ "content": "正确", "isRight": true, "analysis": null }},
+        {{ "content": "错误", "isRight": false, "analysis": "说明为什么是错的" }}
+      ]
+    }}]
+
+essay:
+  instruction: |
+    请生成 {count} 道简答题（type=3），难度为 {levelName}（level={level}）。
+
+    要求：
+    - options 为空数组 []
+    - subAnswer 填写参考答案，分点列出，用序号标注
+    - analysis 说明答题要点和评分标准
+
+    输出格式（JSON 数组）：
+    [{{
+      "type": 3,
+      "typeName": "简答题",
+      "level": {level},
+      "levelName": "{levelName}",
+      "content": "问题内容",
+      "analysis": "答题要点说明和评分标准",
+      "subAnswer": "1. 要点一\\n2. 要点二\\n3. 要点三",
+      "options": []
+    }}]
