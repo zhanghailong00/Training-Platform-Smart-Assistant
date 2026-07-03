@@ -17,6 +17,7 @@ def parse_pdf(file_bytes: bytes) -> str:
 
     try:
         doc = fitz.open(stream=file_bytes, filetype="pdf")
+        page_count = len(doc)
         text_parts = []
         for page in doc:
             text_parts.append(page.get_text())
@@ -24,7 +25,7 @@ def parse_pdf(file_bytes: bytes) -> str:
         text = "\n".join(text_parts)
         if not text.strip():
             raise DocumentParseError("PDF 文件中未提取到文本内容，可能是扫描件或图片型 PDF")
-        logger.info(f"PDF 解析完成，共 {len(doc)} 页，{len(text)} 字符")
+        logger.info(f"PDF 解析完成，共 {page_count} 页，{len(text)} 字符")
         return text
     except DocumentParseError:
         raise

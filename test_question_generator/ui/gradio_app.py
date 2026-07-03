@@ -22,18 +22,18 @@ def _handle_generate(
     """
     Gradio 回调函数：处理生成请求，返回 JSON 字符串。
     """
-    # 处理文件
+    # 处理文件（Gradio 6.x 返回文件路径，需手动读取）
     file_bytes = None
     filename = None
     if file is not None:
-        if hasattr(file, "read"):
-            file_bytes = file.read()
-        else:
-            file_bytes = file
+        # Gradio 6.x 返回文件路径（str 或 NamedString）
+        file_path = str(file)
+        filename = file_path.split("/")[-1] if hasattr(file, "name") else file_path.split("\\")[-1]
         if hasattr(file, "name"):
-            filename = file.name
-        else:
-            filename = "upload.pdf"
+            filename = file.name.split("/")[-1].split("\\")[-1]
+        with open(file_path, "rb") as f:
+            file_bytes = f.read()
+        logger.info(f"读取文件: {filename}, {len(file_bytes)} bytes")
 
     # 处理题型：Gradio CheckboxGroup 可能返回字符串列表
     type_values = []
