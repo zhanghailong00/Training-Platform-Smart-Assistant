@@ -1,30 +1,36 @@
-"""JSON 校验组件：从 LLM 响应中提取 JSON + Pydantic 校验"""
+"""JSON 校验组件：从 LLM 响应中提取 JSON + Pydantic 校验 + 业务规则校验
 
-from typing import List
+返回校验结果和错误详情，供 exam_service 做自修复重试。
+"""
+
+from typing import List, Tuple
 from pydantic import ValidationError as PydanticValidationError
 from core.logger import get_logger
 from core.exceptions import JSONExtractionError, ValidationError
-from utils.json_utils import extract_json, repair_json
+from utils.json_utils import extract_json, repair_json, unwrap_questions
 from schemas.question import Question
+from .business_validator import validate_business_rules
 
 logger = get_logger(__name__)
 
 
-def validate(raw_response: str) -> List[Question]:
+def validate(raw_response: str) -> Tuple[List[Question], List[str]]:
     """
-    从 LLM 原始响应中提取并校验试题列表。
+    从 LLM 原始响应中提取并校验试题。
 
     流程：
     1. 尝试修复常见 JSON 格式问题
-    2. 提取 JSON 数据
+    2. 提取 JSON 数据，解包 {"questions": [...]}
     3. 用 Pydantic 逐条校验
-    4. 跳过校验失败的条目，记录警告
+    4. 业务规则校验（单选题1个答案、多选题至少2个等）
+    5. 收集所有错误信息，供自修复重试使用
 
     Args:
         raw_response: LLM 返回的原始文本
 
     Returns:
-        校验通过的 Question 列表
+        (校验通过的 Question 列表, 错误信息列表)
+        两个都为空时表示提取 JSON 失败或全未通过。
 
     Raises:
         JSONExtractionError: 无法从响应中提取 JSON
@@ -40,19 +46,20 @@ def validate(raw_response: str) -> List[Question]:
         logger.error(f"JSON 提取失败: {e}")
         raise JSONExtractionError(str(e))
 
-    # 2. 确保是列表
+    # 2. 解包 {"questions": [...]} → [...]
+    data = unwrap_questions(data)
+
+    # 3. 确保是列表
     if isinstance(data, dict):
-        # 有些 LLM 可能返回 {"questions": [...]} 之类的包裹
-        if "questions" in data:
-            data = data["questions"]
-        else:
-            # 尝试把 dict 当单条试题处理
-            data = [data]
+        # 可能是单条试题，包裹成列表
+        data = [data]
     elif not isinstance(data, list):
         raise JSONExtractionError(f"期望 JSON 数组，实际得到: {type(data).__name__}")
 
-    # 3. 逐条校验
+    # 4. Pydantic 逐条校验
     questions = []
+    all_errors = []
+
     for i, item in enumerate(data):
         if not isinstance(item, dict):
             logger.warning(f"跳过非对象元素 [{i}]: {type(item).__name__}")
@@ -62,14 +69,40 @@ def validate(raw_response: str) -> List[Question]:
             question = Question.model_validate(item)
             questions.append(question)
         except PydanticValidationError as e:
-            logger.warning(f"试题 [{i}] 校验失败，跳过: {e.errors()}")
+            error_detail = f"试题 [{i}] 字段校验失败: {e.errors()}"
+            logger.warning(error_detail)
+            all_errors.append(error_detail)
             continue
 
     if not questions:
-        raise ValidationError(
-            f"所有试题校验失败（共 {len(data)} 条原始数据）。"
-            f"原始响应前 300 字符: {raw_response[:300]}"
+        all_errors.append(
+            f"所有试题字段校验失败（共 {len(data)} 条原始数据）。"
         )
+        return [], all_errors
 
-    logger.info(f"JSON 校验完成: {len(questions)}/{len(data)} 条通过")
-    return questions
+    # 5. 业务规则校验
+    business_errors = validate_business_rules(questions)
+    all_errors.extend(business_errors)
+
+    # 如果有业务规则错误，移除校验不通过的题目
+    if business_errors:
+        # 收集有问题的题目索引
+        bad_indices = set()
+        for err in business_errors:
+            # 解析错误信息中的索引，如 "单选题 [0] 应有..."
+            import re
+            match = re.search(r'\[(\d+)\]', err)
+            if match:
+                bad_indices.add(int(match.group(1)))
+
+        # 按索引倒序移除，避免移位问题
+        questions = [q for i, q in enumerate(questions) if i not in bad_indices]
+
+        if not questions:
+            all_errors.append("所有试题均未通过业务规则校验")
+            return [], all_errors
+
+    logger.info(
+        f"校验完成: {len(questions)} 道通过, {len(all_errors)} 个错误"
+    )
+    return questions, all_errors

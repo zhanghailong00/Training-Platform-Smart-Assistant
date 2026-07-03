@@ -170,8 +170,9 @@ def test_step3_json_validation():
     print("=" * 60)
 
     # 使用模拟 LLM 响应
-    questions = validate(MOCK_LLM_RESPONSE)
+    questions, errors = validate(MOCK_LLM_RESPONSE)
     assert len(questions) == 4, f"期望 4 道题，实际 {len(questions)} 道"
+    assert not errors, f"期望无错误，实际: {errors}"
     print(f"  [OK] 校验通过: {len(questions)} 道题")
 
     for i, q in enumerate(questions):

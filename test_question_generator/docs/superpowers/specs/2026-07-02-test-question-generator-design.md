@@ -635,14 +635,14 @@ Content-Type: application/json
 
 ## 七、错误处理
 
-| 场景 | 处理方式 |
-|---|---|
-| PDF/Word 解析失败 | `DocumentParseError` | 返回 400 + "文档无法解析，请检查文件是否损坏" |
-| 文本过长超过 token 限制 | 自动截断 + 日志警告 | 告知用户截断位置 |
+| 场景 | 异常类型 | 处理方式 |
+|---|---|---|
+| PDF/Word 解析失败 | `DocumentParseError` | 返回 400 |
+| 文本过长超过 token 限制 | 自动截断 | 日志警告，告知截断位置 |
 | DeepSeek API 超时 | `LLMTimeoutError` | 重试 2 次（指数退避），仍失败返回 502 |
-| DeepSeek API 返回非 JSON | `JSONExtractionError` | JSON 提取器尝试正则匹配，失败则返回原始文本 + 错误提示 |
-| Pydantic 校验不通过 | `ValidationError` | 尝试自动修复（补字段、修类型），失败则返回 500 + 详情 |
-| DeepSeek 余额不足 / Key 无效 | `LLMAPIError` | 返回 500 + "LLM 服务不可用，请联系管理员" |
+| DeepSeek API 返回非 JSON | `JSONExtractionError` | JSON 提取器尝试正则匹配 |
+| Pydantic 校验不通过 | `ValidationError` | 跳过校验失败的试题，返回通过的 |
+| DeepSeek 余额不足 / Key 无效 | `LLMAPIError` | 返回 500 |
 
 > 所有自定义异常定义在 `core/exceptions.py`，便于统一捕获和处理。
 
@@ -653,11 +653,38 @@ Content-Type: application/json
 | 序号 | 事项 | 状态 | 负责人 |
 |---|---|---|---|
 | 1 | 试题 JSON 字段已对齐同事格式 → `schemas/question.py` | ✅ 已确认 | zhanghailong |
-| 2 | DeepSeek API Key 申请 → 填入 `core/settings.py` 或 `.env` | ⚠️ 待确认 | — |
+| 2 | DeepSeek API Key 已配置 → `core/settings.py` | ✅ 已确认 | zhanghailong |
 | 3 | 实训平台技术栈确认（前端框架、调用方式） | ⚠️ 待确认 | — |
 | 4 | PyMuPDF AGPL 许可证校内合规 | ⚠️ 待确认 | — |
 | 5 | 部署环境（Windows Server？端口？nginx？） | ⚠️ 待确认 | — |
-| 6 | 是否需要 DeepSeek reasoner 模式（深度推理，更贵但质量更高） | 💡 可选 | — |
+| 6 | 是否需要 DeepSeek reasoner 模式（深度推理，更贵但质量更高） | 💡 可选，V1.1 不引入 | — |
+
+---
+
+## 九、V1.1 规划
+
+> V1.1 目标：在现有架构上增强稳定性，不改数据模型、不改部署方式。
+
+### 优先级
+
+| 优先级 | 事项 | 改动量 | 说明 |
+|---|---|---|---|
+| P0 | JSON 解析失败自动重试（最多 3 次） | 小 | `validator.py` + `exam_service.py` |
+| P0 | 降级返回：部分成功时不阻塞 | 小 | 跳过失败题型，返回已生成题目 |
+| P0 | 启用 DeepSeek JSON Mode | 小 | `response_format={"type": "json_object"}` |
+| P1 | fallback 备用模型 | 小 | `.env` 配置备用 Key + 自动切换 |
+| P2 | 字段合法性自动修正 | 中 | typeName/levelName 自动补齐 |
+
+### 明确不做（V1.1 范围外）
+
+| 事项 | 原因 |
+|---|---|
+| RAG 知识库 | 需要向量库 + embedding 模型，属于 V2 |
+| 并发支持 | 目前单机单用户，不存在瓶颈 |
+| 题目去重 | 需要平台题库数据，非生成助手能独立完成 |
+| 审核 Agent | 当前由同事人工入库审核，够用 |
+| 用户登录 | 平台负责，本服务不做 |
+| 记忆系统 | 一次性生成场景，不需要长期记忆 |
 
 ---
 

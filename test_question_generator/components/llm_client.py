@@ -51,12 +51,18 @@ def generate(messages: List[Dict[str, str]]) -> str:
             response = client.chat.completions.create(
                 model=settings.llm_model,
                 messages=messages,
+                response_format={'type': 'json_object'},
                 temperature=settings.llm_temperature,
                 max_tokens=settings.llm_max_tokens,
                 top_p=settings.llm_top_p,
             )
 
             content = response.choices[0].message.content
+
+            # JSON Mode 偶尔会返回空 content，此时按失败处理触发重试
+            if not content or not content.strip():
+                logger.warning("DeepSeek 返回了空 content，按失败处理")
+                raise ValueError("Empty response content from DeepSeek JSON Mode")
             usage = response.usage
 
             logger.info(

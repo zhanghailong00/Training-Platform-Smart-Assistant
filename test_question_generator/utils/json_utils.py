@@ -62,6 +62,19 @@ def extract_json(text: str) -> Any:
     raise ValueError(f"无法从响应中提取有效 JSON。原始响应前 200 字符: {text[:200]}")
 
 
+def unwrap_questions(data: Any) -> Any:
+    """
+    解包 JSON Mode 输出的 {"questions": [...]} 格式。
+
+    JSON Mode 要求输出 JSON 对象，不能输出数组。
+    所以 LLM 会输出 {"questions": [...]}，这个函数把它转回 [...]。
+    如果 data 已经是数组，直接返回。
+    """
+    if isinstance(data, dict) and "questions" in data:
+        return data["questions"]
+    return data
+
+
 def repair_json(text: str) -> str:
     """
     修复常见的 JSON 格式问题。

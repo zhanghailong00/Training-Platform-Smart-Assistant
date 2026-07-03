@@ -2,7 +2,7 @@
 
 > 日期：2026-07-02
 > 基于设计文档：`docs/superpowers/specs/2026-07-02-test-question-generator-design.md`
-> 状态：✅ 代码全部完成，模拟验证通过，待配置 API Key 进行端到端测试
+> 状态：✅ V1 MVP 完成，已通过真实 LLM 端到端验证
 
 **Goal:** 构建试题自动生成服务，老师上传文档或输入文本 → DeepSeek 生成试题 → 输出同事格式 JSON
 
@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Python 3.11+, conda 环境管理
+- Python 3.11+, 用 pip 管理依赖（当前环境 helper）
 - DeepSeek API 调用，OpenAI 兼容 SDK
 - 文档支持：PDF (PyMuPDF) + Word (python-docx)
 - 输出格式：同事提供的 subjectBanks JSON schema
@@ -23,7 +23,7 @@
 
 ---
 
-## 完成状态总览
+## V1 MVP 完成状态总览（2026-07-02）
 
 | Phase | 内容 | 文件数 | 状态 |
 |---|---|---|---|
@@ -34,48 +34,113 @@
 | 5 | 服务编排层 (services/) | 1 | ✅ 完成 |
 | 6 | API 路由层 (api/) | 1 | ✅ 完成 |
 | 7 | Gradio UI 层 (ui/ + app/) | 2 | ✅ 完成 |
-| 8 | 联调验证 | 2 | ⚠️ 模拟通过，待真实 API |
+| 8 | 联调验证 | 2 | ✅ 端到端通过（真实 LLM） |
 
-### 验证结果（2026-07-02）
+### V1 核心验证
 
 ```
-[OK] 步骤 1: 文本预处理（清洗 + token 估算）
-[OK] 步骤 2: Prompt 构建（YAML 模板加载 + 变量替换）
-[OK] 步骤 3: JSON 校验（提取 + Pydantic 校验 + 同事格式）
-[OK] 步骤 4: 响应组装（subjectBanks 外层包裹）
-[OK] 步骤 5: 请求模型（序列化 + 反序列化 + 默认值）
+模拟验证（无 API Key）: python tests/test_full_pipeline.py        → 5/5 通过
+端到端验证（真实 LLM） : python -m app.main 后上传 PDF             → ✅ 4题型全部成功
 ```
-
-运行命令：`python tests/test_full_pipeline.py`
-
-### 待完成
-
-- [ ] 配置 `.env` 中的 `DEEPSEEK_API_KEY`
-- [ ] 运行 `python playground/prompt_test.py` 测试真实 LLM 生成
-- [ ] 启动服务 `python -m app.main`，浏览器打开 http://localhost:7860
-- [ ] 测试 API 端点 `POST /api/v1/generate`
 
 ---
 
-## 项目文件清单（38 个文件）
+## V1.1 TODO（稳定性增强）
 
----
+> V1.1 不改架构、不改数据模型、不改部署方式。在现有代码上增强稳定性。
 
-## Phase 1：项目初始化 & 基础设置
+### 优先级说明
 
-**目标**：项目骨架立起来，conda 环境可用，目录结构就位
+| 优先级 | 事项 | 改动量 | 涉及文件 | 原因 |
+|---|---|---|---|---|
+| P0 | JSON 解析失败自动重试（最多 3 次） | 小 | `validator.py`, `exam_service.py` | 现在一次失败就报错 |
+| P0 | 降级返回：部分题型成功时返回已成功题目 | 小 | `exam_service.py` | 现在一个题型失败全盘失败 |
+| P0 | LLM 原始输出中加入 DeepSeek JSON Mode | 小 | `llm_client.py`, `prompts/` | 提高 JSON 输出稳定性 |
+| P1 | 兜底模型（fallback API） | 小 | `core/settings.py`, `llm_client.py` | DeepSeek 满载时自动切换 |
+| P2 | 字段合法性自动修正 | 中 | `validator.py`, `question.py` | typeName/levelName 不匹配时自动补 |
 
-### 任务清单
+### V1.1 TODO 清单
 
-- [ ] 1.1 创建 `environment.yml`（conda 环境定义）
-- [ ] 1.2 `conda env create -f environment.yml` 创建环境
-- [ ] 1.3 创建所有 `__init__.py` 文件
-- [ ] 1.4 实现 `core/constants.py` — 常量定义
-- [ ] 1.5 实现 `core/settings.py` — 配置管理（读 `.env`）
-- [ ] 1.6 实现 `core/logger.py` — 统一日志
-- [ ] 1.7 实现 `core/exceptions.py` — 自定义异常
-- [ ] 1.8 创建 `.env.example` 模板
-- [ ] 1.9 创建 `README.md`
+```
+P0 - 最高优先级
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[ ] 1. JSON 解析失败自动重试
+    位置: components/validator.py → validate()
+    改动: 当 JSON 提取失败时，不直接抛异常，返回空列表，由 exam_service 触发重试
+    限制: 最多重试 3 次
+
+[ ] 2. exam_service 增加重试循环
+    位置: services/exam_service.py
+    改动: 对每种题型，validate() 返回空时重试 prompt_builder → llm_client → validator
+         最多 3 次
+    设计:
+         for qtype in question_types:
+             for attempt in range(3):
+                 messages = build_messages(...)
+                 raw = llm_generate(messages)
+                 questions = validate(raw)
+                 if questions: break  # 成功
+             如果 3 次都失败: 跳过该题型，继续下一个
+             最后如果总题目数为 0 才返回错误
+
+[ ] 3. 降级返回
+    位置: services/exam_service.py
+    改动: 部分题型生成成功时，返回已成功的题目 + 错误信息说明哪些题型失败
+          不阻塞整个流程
+
+[ ] 4. 启用 DeepSeek JSON Mode
+    位置: components/llm_client.py
+    改动: 在 API 调用中增加 response_format={"type": "json_object"}
+    注意: 需要在 system prompt 末尾强调"输出 JSON 对象，不要加 markdown 代码块标记"
+    验证: 通过 playground/prompt_test.py 测试
+
+P1 - 中优先级
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[ ] 5. fallback 模型配置
+    位置:
+      - core/settings.py: 增加 FALLBACK_API_KEY, FALLBACK_BASE_URL, FALLBACK_MODEL
+      - .env.example: 增加 fallback 配置项
+      - components/llm_client.py: 主模型失败时自动 fallback
+
+    设计:
+        def _try_providers(messages) -> str:
+            providers = [
+                (settings.llm_api_key, settings.llm_base_url, settings.llm_model),
+                (settings.fallback_api_key, settings.fallback_base_url, settings.fallback_model),
+            ]
+            for api_key, base_url, model in providers:
+                if not api_key: continue
+                try:
+                    return _call(api_key, base_url, model, messages)
+                except (LLMTimeoutError, LLMAPIError):
+                    continue
+            raise LLMAPIError("所有 LLM 服务均不可用")
+
+P2 - 低优先级
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[ ] 6. 字段合法性自动修正
+    位置: components/validator.py
+    改动: 校验 Question 时，如果 typeName 和 type 不匹配，自动修正
+          如果 levelName 和 level 不匹配，自动修正
+          记录修正日志（logger.warning）
+    规则:
+        typeName = QUESTION_TYPE_NAMES[question.type]
+        levelName = DIFFICULTY_NAMES[question.level]
+```
+
+### 明确不做（V1.1 范围外）
+
+| 事项 | 原因 |
+|---|---|
+| RAG 知识库 | 需要向量库 + embedding 模型，属于 V2 |
+| 并发支持 | 目前单机单用户，不存在瓶颈 |
+| 题目去重 | 需要平台题库数据，非生成助手能独立完成 |
+| 审核 Agent | 当前由同事人工入库审核，够用 |
+| 用户登录 | 平台负责，本服务不做 |
+| 记忆系统 | 一次性生成场景，不需要长期记忆 |
 
 ### 产出文件
 

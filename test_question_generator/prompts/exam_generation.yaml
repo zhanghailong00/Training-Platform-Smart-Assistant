@@ -7,8 +7,9 @@ system: |
   3. 每个错误选项的 analysis 字段必须说明该选项为什么错（不能为 null）
   4. 正确选项的 analysis 可以为 null
   5. 每道题必须附带题目解析（analysis 字段）
-  6. 输出必须为严格的 JSON 数组格式，不要输出任何 JSON 之外的内容
+  6. 输出必须为严格的 JSON 对象格式，所有试题放在 questions 字段中
   7. 选项文本中不要包含 "A." "B." 等前缀
+  8. 确保 JSON 语法正确：括号成对、引号闭合、无尾随逗号
 
 single_choice:
   instruction: |
@@ -20,22 +21,26 @@ single_choice:
     - 所有 isRight=false 的选项，其 analysis 必须说明该选项为什么错
     - isRight=true 的选项，其 analysis 设为 null
 
-    输出格式（JSON 数组）：
-    [{{
-      "type": 0,
-      "typeName": "单选题",
-      "level": {level},
-      "levelName": "{levelName}",
-      "content": "题干内容",
-      "analysis": "本题考察的知识点和解题思路",
-      "subAnswer": null,
-      "options": [
-        {{ "content": "选项内容", "isRight": false, "analysis": "错误原因说明" }},
-        {{ "content": "选项内容", "isRight": true, "analysis": null }},
-        {{ "content": "选项内容", "isRight": false, "analysis": "错误原因说明" }},
-        {{ "content": "选项内容", "isRight": false, "analysis": "错误原因说明" }}
+    输出格式（JSON 对象，questions 为数组）：
+    {{
+      "questions": [
+        {{
+          "type": 0,
+          "typeName": "单选题",
+          "level": {level},
+          "levelName": "{levelName}",
+          "content": "题干内容",
+          "analysis": "本题考察的知识点和解题思路",
+          "subAnswer": null,
+          "options": [
+            {{ "content": "选项内容", "isRight": false, "analysis": "错误原因说明" }},
+            {{ "content": "选项内容", "isRight": true, "analysis": null }},
+            {{ "content": "选项内容", "isRight": false, "analysis": "错误原因说明" }},
+            {{ "content": "选项内容", "isRight": false, "analysis": "错误原因说明" }}
+          ]
+        }}
       ]
-    }}]
+    }}
 
 multi_choice:
   instruction: |
@@ -47,22 +52,26 @@ multi_choice:
     - 所有 isRight=false 的选项，其 analysis 必须说明该选项为什么错
     - isRight=true 的选项，其 analysis 设为 null
 
-    输出格式（JSON 数组）：
-    [{{
-      "type": 1,
-      "typeName": "多选题",
-      "level": {level},
-      "levelName": "{levelName}",
-      "content": "题干内容",
-      "analysis": "本题考察的知识点和解题思路",
-      "subAnswer": null,
-      "options": [
-        {{ "content": "选项内容", "isRight": true, "analysis": null }},
-        {{ "content": "选项内容", "isRight": true, "analysis": null }},
-        {{ "content": "选项内容", "isRight": false, "analysis": "错误原因说明" }},
-        {{ "content": "选项内容", "isRight": false, "analysis": "错误原因说明" }}
+    输出格式（JSON 对象，questions 为数组）：
+    {{
+      "questions": [
+        {{
+          "type": 1,
+          "typeName": "多选题",
+          "level": {level},
+          "levelName": "{levelName}",
+          "content": "题干内容",
+          "analysis": "本题考察的知识点和解题思路",
+          "subAnswer": null,
+          "options": [
+            {{ "content": "选项内容", "isRight": true, "analysis": null }},
+            {{ "content": "选项内容", "isRight": true, "analysis": null }},
+            {{ "content": "选项内容", "isRight": false, "analysis": "错误原因说明" }},
+            {{ "content": "选项内容", "isRight": false, "analysis": "错误原因说明" }}
+          ]
+        }}
       ]
-    }}]
+    }}
 
 true_false:
   instruction: |
@@ -73,20 +82,24 @@ true_false:
     - 恰好 1 个选项的 isRight 为 true
     - isRight=false 的选项，其 analysis 必须说明为什么判断错误
 
-    输出格式（JSON 数组）：
-    [{{
-      "type": 2,
-      "typeName": "判断题",
-      "level": {level},
-      "levelName": "{levelName}",
-      "content": "判断内容",
-      "analysis": "本题考察的知识点和判断依据",
-      "subAnswer": null,
-      "options": [
-        {{ "content": "正确", "isRight": true, "analysis": null }},
-        {{ "content": "错误", "isRight": false, "analysis": "说明为什么是错的" }}
+    输出格式（JSON 对象，questions 为数组）：
+    {{
+      "questions": [
+        {{
+          "type": 2,
+          "typeName": "判断题",
+          "level": {level},
+          "levelName": "{levelName}",
+          "content": "判断内容",
+          "analysis": "本题考察的知识点和判断依据",
+          "subAnswer": null,
+          "options": [
+            {{ "content": "正确", "isRight": true, "analysis": null }},
+            {{ "content": "错误", "isRight": false, "analysis": "说明为什么是错的" }}
+          ]
+        }}
       ]
-    }}]
+    }}
 
 essay:
   instruction: |
@@ -97,14 +110,18 @@ essay:
     - subAnswer 填写参考答案，分点列出，用序号标注
     - analysis 说明答题要点和评分标准
 
-    输出格式（JSON 数组）：
-    [{{
-      "type": 3,
-      "typeName": "简答题",
-      "level": {level},
-      "levelName": "{levelName}",
-      "content": "问题内容",
-      "analysis": "答题要点说明和评分标准",
-      "subAnswer": "1. 要点一\\n2. 要点二\\n3. 要点三",
-      "options": []
-    }}]
+    输出格式（JSON 对象，questions 为数组）：
+    {{
+      "questions": [
+        {{
+          "type": 3,
+          "typeName": "简答题",
+          "level": {level},
+          "levelName": "{levelName}",
+          "content": "问题内容",
+          "analysis": "答题要点说明和评分标准",
+          "subAnswer": "1. 要点一\\n2. 要点二\\n3. 要点三",
+          "options": []
+        }}
+      ]
+    }}
