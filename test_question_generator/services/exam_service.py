@@ -9,7 +9,7 @@ from schemas.question import Question
 from components.parser import parse
 from components.preprocessor import process
 from components.prompt_builder import build_messages
-from components.llm_client import generate as llm_generate
+from components.llm_client import generate as llm_generate, reset_provider_state
 from components.validator import validate
 
 logger = get_logger(__name__)
@@ -37,6 +37,9 @@ def generate_questions(
     Returns:
         GenerateResponse（包含 subjectBanks）
     """
+    # 0. 重置模型状态，新请求先试主模型
+    reset_provider_state()
+
     # 1. 获取文本
     if file_bytes and filename:
         logger.info(f"解析上传文件: {filename}")
