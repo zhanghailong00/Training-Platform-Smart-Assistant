@@ -33,6 +33,7 @@ def _call_provider(
     model: str,
     messages: List[Dict[str, str]],
     provider_name: str,
+    use_json_mode: bool = True,
 ) -> str:
     """
     调用单个模型，带指数退避重试。
@@ -58,14 +59,17 @@ def _call_provider(
                 f"model={model}, messages_count={len(messages)}"
             )
 
-            response = client.chat.completions.create(
+            kwargs = dict(
                 model=model,
                 messages=messages,
-                response_format={'type': 'json_object'},
                 temperature=settings.llm_temperature,
                 max_tokens=settings.llm_max_tokens,
                 top_p=settings.llm_top_p,
             )
+            if use_json_mode:
+                kwargs["response_format"] = {'type': 'json_object'}
+
+            response = client.chat.completions.create(**kwargs)
 
             content = response.choices[0].message.content
 
@@ -101,7 +105,7 @@ def _call_provider(
     raise last_error  # type: ignore
 
 
-def generate(messages: List[Dict[str, str]]) -> str:
+def generate(messages: List[Dict[str, str]], use_json_mode: bool = True) -> str:
     """
     调用 LLM 生成响应，主模型失败时自动切换到备用模型。
 
@@ -111,6 +115,7 @@ def generate(messages: List[Dict[str, str]]) -> str:
 
     Args:
         messages: [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}]
+        use_json_mode: 是否使用 JSON Mode。试题生成需要 True，课程简介等纯文本生成需要 False。
 
     Returns:
         LLM 响应的原始文本
@@ -132,6 +137,7 @@ def generate(messages: List[Dict[str, str]]) -> str:
             settings.fallback_model,
             messages,
             "Qwen",
+            use_json_mode=use_json_mode,
         )
 
     # 主模型未失效 → 先试主模型
@@ -142,11 +148,12 @@ def generate(messages: List[Dict[str, str]]) -> str:
             settings.llm_model,
             messages,
             "DeepSeek",
+            use_json_mode=use_json_mode,
         )
         return result
     except Exception as e:
         logger.warning(f"主模型 DeepSeek 不可用: {e}")
-        _primary_failed = True  # 标记失效，后续题型直接走备用
+        _primary_failed = True
 
         # 尝试备用模型
         if settings.fallback_api_key:
@@ -158,6 +165,7 @@ def generate(messages: List[Dict[str, str]]) -> str:
                     settings.fallback_model,
                     messages,
                     "Qwen",
+                    use_json_mode=use_json_mode,
                 )
             except Exception as fallback_error:
                 raise LLMAPIError(

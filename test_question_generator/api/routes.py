@@ -3,7 +3,9 @@
 from fastapi import APIRouter, HTTPException
 from schemas.request import GenerateRequest
 from schemas.response import GenerateResponse
+from schemas.course_intro import CourseIntroRequest, CourseIntroResponse
 from services.exam_service import generate_questions
+from services.course_intro_service import generate_course_intro
 from core.exceptions import (
     DocumentParseError,
     UnsupportedFormatError,
@@ -53,3 +55,17 @@ async def generate(req: GenerateRequest):
 async def health():
     """健康检查"""
     return {"status": "ok", "service": "试题生成助手", "version": "1.0.0"}
+
+
+@router.post("/course-intro", response_model=CourseIntroResponse)
+async def course_intro(req: CourseIntroRequest):
+    """
+    生成课程简介。
+
+    接收课程名称和章节结构，返回一段 200-300 字的课程简介文本。
+    """
+    try:
+        return generate_course_intro(req)
+    except Exception as e:
+        logger.exception(f"课程简介生成失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
