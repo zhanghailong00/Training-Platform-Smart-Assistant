@@ -1,11 +1,15 @@
 """API 路由：提供 REST API 端点供实训平台调用"""
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse
+from pathlib import Path
 from schemas.request import GenerateRequest
 from schemas.response import GenerateResponse
 from schemas.course_intro import CourseIntroRequest, CourseIntroResponse
+from schemas.lab import LabManualRequest, LabManualResponse
 from services.exam_service import generate_questions
 from services.course_intro_service import generate_course_intro
+from services.lab_service import generate_lab_manual
 from core.exceptions import (
     DocumentParseError,
     UnsupportedFormatError,
@@ -69,3 +73,33 @@ async def course_intro(req: CourseIntroRequest):
     except Exception as e:
         logger.exception(f"课程简介生成失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/lab-manual", response_model=LabManualResponse)
+async def lab_manual(req: LabManualRequest):
+    """
+    生成实验指导手册或实验报告模板。
+
+    接收实验名称和教学内容，返回 Markdown 内容 + Word 下载地址。
+    """
+    try:
+        return generate_lab_manual(req)
+    except Exception as e:
+        logger.exception(f"实验手册生成失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/lab-manual/{filename}/download")
+async def download_lab_manual(filename: str):
+    """
+    下载生成的 Word 文件。
+    """
+    file_path = Path(__file__).resolve().parent.parent / "downloads" / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="文件不存在或已过期")
+
+    return FileResponse(
+        path=str(file_path),
+        filename=filename,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )

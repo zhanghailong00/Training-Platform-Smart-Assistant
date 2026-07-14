@@ -132,3 +132,61 @@ class Solution:
         
         # 从完整数组区间启动递归
         return build(0, len(preorder)-1, 0, len(inorder)-1)
+
+class Solution:
+    def decodeString(self, s: str) -> str:
+        stack = []
+        current_str = ""
+        current_num = 0
+
+        for char in s:
+            if char.isdigit():
+                current_num = current_num * 10 + int(char)
+            elif char == "[":
+                stack.append((current_str,current_num))
+                current_num = 0
+                current_str = ""
+            elif char == "]":
+                pre_str , repet_num = stack.pop()
+                current_str = pre_str + current_str * repet_num
+            else:
+                current += char
+        return current_str
+    
+
+class Solution:
+    def combinationSum(self, candidates: List[int], target: int) -> List[List[int]]:
+        res = []
+
+        def back(start,path,current_num):
+            if current_num == target:
+                res.append(path.copy())
+                return
+            
+            if current_num>target:
+                return
+            
+            for i in range(start,len(candidates)):
+                num = candidates[i]
+                path.append(num)
+
+                back(i,path,current_num+num)
+                path.pop()
+        back(0,[],0)
+        return res
+
+class Solution:
+    def minPathSum(self, grid: List[List[int]]) -> int:
+        m = len(grid)
+        n = len(grid[0])
+
+        for i in range(1,n):
+            grid[0][i] += grid[0][i-1]
+        for j in range(1,m):
+            grid[j][0] += grid[j-1][0]
+
+        for i in range(1,m):
+            for j in range(1,n):
+                grid[i][j] += min(grid[i-1][j],grid[i][j-1])
+        
+        return grid[m-1][n-1]
