@@ -47,6 +47,11 @@ class Settings:
     host: str = os.getenv("HOST", DEFAULT_HOST)
     port: int = int(os.getenv("PORT", str(DEFAULT_PORT)))
 
+    # Qwen3.5-OCR（图片文字识别）
+    daskscope_api_key: str = os.getenv("DASHSCOPE_API_KEY", "")
+    qwen_ocr_base_url: str = os.getenv("QWEN_OCR_BASE_URL", "https://llm-j4lncwm5mk7pyl4v.cn-beijing.maas.aliyuncs.com/compatible-mode/v1")
+    qwen_ocr_model: str = os.getenv("QWEN_OCR_MODEL", "qwen3.5-ocr")
+
     # 日志
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
 

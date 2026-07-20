@@ -1,15 +1,17 @@
 """API 路由：提供 REST API 端点供实训平台调用"""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, File, UploadFile, Form
 from fastapi.responses import FileResponse
 from pathlib import Path
 from schemas.request import GenerateRequest
 from schemas.response import GenerateResponse
 from schemas.course_intro import CourseIntroRequest, CourseIntroResponse
 from schemas.lab import LabManualRequest, LabManualResponse
+from schemas.ocr import OcrRequest
 from services.exam_service import generate_questions
 from services.course_intro_service import generate_course_intro
 from services.lab_service import generate_lab_manual
+from services.ocr_service import ocr_recognize
 from core.exceptions import (
     DocumentParseError,
     UnsupportedFormatError,
@@ -103,3 +105,37 @@ async def download_lab_manual(filename: str):
         filename=filename,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     )
+
+
+@router.post("/ocr-recognize", response_model=GenerateResponse)
+async def ocr_recognize_endpoint(
+    image: UploadFile = File(..., description="试卷图片"),
+    subject_bank_name: str = Form("OCR识别题库", description="题库名称"),
+    subject_bank_remark: str = Form("", description="题库描述"),
+):
+    """
+    OCR 识别图片中的试题。
+
+    上传试卷图片，自动识别图片中的文字，提取试题信息，返回标准题库 JSON。
+    """
+    # 读取上传的图片
+    image_bytes = await image.read()
+
+    if not image_bytes:
+        raise HTTPException(status_code=400, detail="上传的图片为空")
+
+    logger.info(
+        f"OCR 识别请求: image={image.filename}, "
+        f"size={len(image_bytes)} bytes"
+    )
+
+    req = OcrRequest(
+        subject_bank_name=subject_bank_name,
+        subject_bank_remark=subject_bank_remark,
+    )
+
+    try:
+        return ocr_recognize(req, image_bytes)
+    except Exception as e:
+        logger.exception(f"OCR 识别失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
