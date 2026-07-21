@@ -6,8 +6,10 @@ from pathlib import Path
 import gradio as gr
 from services.exam_service import generate_questions
 from services.lab_service import generate_lab_manual
+from services.ocr_service import ocr_recognize
 from schemas.request import GenerateRequest
 from schemas.lab import LabManualRequest
+from schemas.ocr import OcrRequest
 from core.logger import get_logger
 
 logger = get_logger(__name__)
@@ -125,6 +127,59 @@ def _handle_lab_download(markdown_text: str, title: str) -> tuple:
     except Exception as e:
         logger.exception(f"Word 生成失败: {e}")
         return None, f"❌ Word 生成失败: {e}"
+
+
+# ============================================================
+# OCR 试题识别
+# ============================================================
+
+def _handle_ocr(images, bank_name: str, remark: str) -> str:
+    """Gradio 回调：OCR 试题识别（支持多张图片）"""
+    if images is None or (isinstance(images, list) and len(images) == 0):
+        return json.dumps({"success": False, "error": "请上传至少一张图片"}, ensure_ascii=False, indent=2)
+
+    # 统一转为列表
+    if not isinstance(images, list):
+        images = [images]
+
+    all_questions = []
+    total_errors = []
+
+    for img in images:
+        try:
+            file_path = str(img)
+            with open(file_path, "rb") as f:
+                image_bytes = f.read()
+
+            req = OcrRequest(
+                subject_bank_name=bank_name,
+                subject_bank_remark=remark,
+            )
+            resp = ocr_recognize(req, image_bytes)
+
+            if resp.success and resp.subjectBanks:
+                for bank in resp.subjectBanks:
+                    all_questions.extend(bank.questions)
+            else:
+                total_errors.append(resp.error or "识别失败")
+        except Exception as e:
+            logger.exception(f"OCR 识别失败: {e}")
+            total_errors.append(str(e))
+
+    if not all_questions:
+        error_msg = "; ".join(total_errors) if total_errors else "所有图片均未识别出试题"
+        return json.dumps({"success": False, "error": error_msg}, ensure_ascii=False, indent=2)
+
+    result = {
+        "success": True,
+        "subjectBanks": [{
+            "name": bank_name,
+            "remark": remark,
+            "questions": [q.model_dump() for q in all_questions],
+        }],
+        "error": "; ".join(total_errors) if total_errors else None,
+    }
+    return json.dumps(result, ensure_ascii=False, indent=2)
 
 
 # ============================================================
@@ -253,6 +308,43 @@ def create_ui() -> gr.Blocks:
                     fn=lambda md: md,
                     inputs=[lab_md_editor],
                     outputs=[lab_preview],
+                )
+
+            # ========== Tab 3：OCR 试题识别 ==========
+            with gr.Tab("📷 OCR 识别"):
+                with gr.Row():
+                    with gr.Column(scale=1):
+                        gr.Markdown("### 📋 基本信息")
+                        ocr_bank_name = gr.Textbox(
+                            label="题库名称",
+                            value="OCR识别题库",
+                        )
+                        ocr_remark = gr.Textbox(
+                            label="题库描述",
+                            placeholder="如：计算机基础第一章",
+                        )
+
+                        gr.Markdown("### 🖼️ 上传图片（支持多张）")
+                        ocr_image = gr.File(
+                            label="上传试卷图片",
+                            file_count="multiple",
+                            file_types=[".png", ".jpg", ".jpeg"],
+                        )
+
+                        ocr_btn = gr.Button("🚀 识别", variant="primary", size="lg")
+
+                    with gr.Column(scale=1):
+                        gr.Markdown("### 📦 识别结果")
+                        ocr_output = gr.Code(
+                            label="JSON 输出",
+                            language="json",
+                            lines=30,
+                        )
+
+                ocr_btn.click(
+                    fn=_handle_ocr,
+                    inputs=[ocr_image, ocr_bank_name, ocr_remark],
+                    outputs=ocr_output,
                 )
 
     return demo
